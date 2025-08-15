@@ -4,7 +4,7 @@ use winit::{
     application::ApplicationHandler,
     event::*,
     event_loop::ActiveEventLoop,
-    keyboard::{KeyCode, PhysicalKey},
+    keyboard::PhysicalKey,
     window::{Window, WindowId},
 };
 
@@ -83,19 +83,26 @@ impl ApplicationHandler<State> for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
-            WindowEvent::RedrawRequested => state.render(),
+            WindowEvent::RedrawRequested => match state.render() {
+                Ok(_) => {}
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    let size = state.window.inner_size();
+                    state.resize(size.width, size.height);
+                }
+                Err(e) => {
+                    log::error!("Unable to render {}", e);
+                }
+            },
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
                         physical_key: PhysicalKey::Code(code),
-                        state,
+                        state: key_state,
                         ..
                     },
                 ..
-            } => match (code, state.is_pressed()) {
-                (KeyCode::Escape, true) => event_loop.exit(),
-                _ => {}
-            },
+            } => state.handle_key(event_loop, code, key_state.is_pressed()),
+            WindowEvent::CursorMoved { position, .. } => state.handle_cursor(position),
             _ => {}
         }
     }
