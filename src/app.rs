@@ -8,7 +8,9 @@ use winit::{
     window::{Window, WindowId},
 };
 
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+#[cfg(target_arch = "wasm32")]
 use winit::event_loop::EventLoop;
 
 pub struct App {
@@ -32,7 +34,8 @@ impl ApplicationHandler<State> for App {
         #[allow(unused_mut)]
         let mut window_attributes = Window::default_attributes();
 
-        if cfg!(target_arch = "wasm32") {
+        #[cfg(target_arch = "wasm32")]
+        {
             use wasm_bindgen::JsCast;
             use winit::platform::web::WindowAttributesExtWebSys;
 
@@ -46,7 +49,8 @@ impl ApplicationHandler<State> for App {
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
-        if cfg!(target_arch = "wasm32") {
+        #[cfg(target_arch = "wasm32")]
+        {
             if let Some(proxy) = self.proxy.take() {
                 wasm_bindgen_futures::spawn_local(async move {
                     assert!(proxy
@@ -54,7 +58,9 @@ impl ApplicationHandler<State> for App {
                         .is_ok())
                 });
             }
-        } else {
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
             self.state = Some(pollster::block_on(State::new(window)).unwrap());
         }
     }

@@ -12,6 +12,10 @@
         pkgs = import nixpkgs {
           inherit system overlays;
         };
+        libPath = with pkgs; lib.makeLibraryPath [
+          xorg.libX11 xorg.libXcursor xorg.libXi xorg.libXrandr
+          libxkbcommon libGL wayland vulkan-loader
+        ];
       in
       with pkgs;
       {
@@ -33,8 +37,10 @@
               })
             )
           ];
+          LD_LIBRARY_PATH = libPath;
+          RUST_BACKTRACE = 1;
           shellHook = ''
-            wasm-bindgen --target web --out-dir ./pkg target/wasm32-unknown-unknown/debug/wgpu_tutorial.wasm;
+            # wasm-bindgen --target web --out-dir ./pkg target/wasm32-unknown-unknown/debug/wgpu_tutorial.wasm;
           '';
         };
       }

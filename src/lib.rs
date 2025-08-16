@@ -8,9 +8,12 @@ use winit::event_loop::EventLoop;
 use wasm_bindgen::prelude::*;
 
 pub fn run() -> anyhow::Result<()> {
-    if cfg!(target_arch = "wasm32") {
+    #[cfg(target_arch = "wasm32")]
+    {
         console_log::init_with_level(log::Level::Info).unwrap_throw();
-    } else {
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
         env_logger::init();
     }
 
