@@ -1,3 +1,4 @@
+use image::GenericImageView;
 use std::sync::Arc;
 use wgpu::{self, util::DeviceExt};
 use winit::{
@@ -49,6 +50,27 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
+const SQUARE_VERTICES: &[Vertex] = &[
+    Vertex {
+        position: [-0.5, 0.5, 0.0],
+        color: [1.0, 0.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.0],
+        color: [0.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, 0.0],
+        color: [0.0, 0.0, 1.0],
+    },
+    Vertex {
+        position: [0.5, 0.5, 0.0],
+        color: [0.0, 0.0, 0.0],
+    },
+];
+
+const SQUARE_INDICES: &[u16] = &[0, 1, 3, 1, 2, 3];
+
 pub struct State {
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
@@ -61,6 +83,10 @@ pub struct State {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
+    pub use_alt_buffers: bool,
+    pub alt_vertex_buffer: wgpu::Buffer,
+    pub alt_index_buffer: wgpu::Buffer,
+    pub alt_num_indices: u32,
 }
 
 impl State {
@@ -119,6 +145,12 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
+        let diffuse_bytes = include_bytes!("assets/happy-tree.png");
+        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+        let _diffuse_rgba = diffuse_image.to_rgba8();
+
+        let _dimensions = diffuse_image.dimensions();
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
@@ -151,6 +183,20 @@ impl State {
 
         let num_indices = INDICES.len() as u32;
 
+        let alt_vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Alt Vertex Buffer"),
+            contents: bytemuck::cast_slice(SQUARE_VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let alt_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Alt Index Buffer"),
+            contents: bytemuck::cast_slice(SQUARE_INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        let alt_num_indices = SQUARE_INDICES.len() as u32;
+
         Ok(Self {
             surface,
             device,
@@ -163,6 +209,10 @@ impl State {
             vertex_buffer,
             index_buffer,
             num_indices,
+            use_alt_buffers: false,
+            alt_vertex_buffer,
+            alt_index_buffer,
+            alt_num_indices,
         })
     }
 
@@ -210,9 +260,18 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+
+            if self.use_alt_buffers {
+                render_pass.set_vertex_buffer(0, self.alt_vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(self.alt_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.alt_num_indices, 0, 0..1);
+            } else {
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -224,6 +283,7 @@ impl State {
     pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
         match (code, is_pressed) {
             (KeyCode::Escape, true) => event_loop.exit(),
+            (KeyCode::Space, true) => self.use_alt_buffers = !self.use_alt_buffers,
             _ => {}
         }
     }
