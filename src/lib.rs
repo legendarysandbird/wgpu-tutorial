@@ -1,5 +1,6 @@
 mod app;
 mod state;
+mod texture;
 
 use crate::app::App;
 use winit::event_loop::EventLoop;
