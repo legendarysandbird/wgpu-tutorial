@@ -1,4 +1,6 @@
 mod app;
+mod camera;
+mod character_controller;
 mod state;
 mod texture;
 

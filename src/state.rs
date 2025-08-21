@@ -1,9 +1,8 @@
-use crate::texture;
+use crate::{camera, character_controller, texture};
+use cgmath::EuclideanSpace;
 use std::sync::Arc;
 use wgpu::{self, util::DeviceExt};
-use winit::{
-    dpi::PhysicalPosition, event_loop::ActiveEventLoop, keyboard::KeyCode, window::Window,
-};
+use winit::window::Window;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -64,6 +63,11 @@ pub struct State {
     pub num_indices: u32,
     pub diffuse_bind_group: wgpu::BindGroup,
     pub _diffuse_texture: texture::Texture,
+    pub camera: camera::Camera,
+    pub camera_uniform: camera::CameraUniform,
+    pub camera_buffer: wgpu::Buffer,
+    pub camera_bind_group: wgpu::BindGroup,
+    pub character_controller: character_controller::CharacterController,
 }
 
 impl State {
@@ -164,10 +168,55 @@ impl State {
             ],
         });
 
+        let mut character_controller = character_controller::CharacterController::new();
+
+        let camera = camera::Camera {
+            eye: character_controller.update_and_get_position(),
+            target: cgmath::Point3::origin(),
+            up: cgmath::Vector3::unit_y(),
+            aspect: config.width as f32 / config.height as f32,
+            fovy: 45.0,
+            znear: 0.1,
+            zfar: 100.0,
+        };
+
+        let mut camera_uniform = camera::CameraUniform::new();
+        camera_uniform.update_view_proj(&camera);
+
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::cast_slice(&[camera_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Camera Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
+        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Camera Bind Group"),
+            layout: &camera_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+        });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout],
+                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
@@ -210,6 +259,11 @@ impl State {
             num_indices,
             diffuse_bind_group,
             _diffuse_texture: diffuse_texture,
+            camera,
+            camera_uniform,
+            camera_buffer,
+            camera_bind_group,
+            character_controller,
         })
     }
 
@@ -258,6 +312,7 @@ impl State {
 
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
 
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -270,22 +325,6 @@ impl State {
         Ok(())
     }
 
-    pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        match (code, is_pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
-            _ => {}
-        }
-    }
-
-    pub fn handle_cursor(&mut self, position: PhysicalPosition<f64>) {
-        self.clear_color = wgpu::Color {
-            r: position.x / 2.0 / self.config.width as f64,
-            g: 0.5,
-            b: position.y / 2.0 / self.config.height as f64,
-            a: 1.0,
-        }
-    }
-
     fn create_render_pipeline(
         device: &wgpu::Device,
         render_pipeline_layout: &wgpu::PipelineLayout,
@@ -294,7 +333,7 @@ impl State {
     ) -> wgpu::RenderPipeline {
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
+            layout: Some(render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: shader,
                 entry_point: Some("vs_main"),
@@ -331,5 +370,25 @@ impl State {
         })
     }
 
-    fn _update(&mut self) {}
+    pub fn update(&mut self) {
+        self.camera.eye = self.character_controller.update_and_get_position();
+        self.camera.target = self.character_controller.get_target_position();
+        self.camera_uniform.update_view_proj(&self.camera);
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniform]),
+        );
+    }
+
+    pub fn set_focus(&mut self, focused: bool) {
+        self.window.set_cursor_visible(!focused);
+
+        let cursor_mode = if focused {
+            winit::window::CursorGrabMode::Confined
+        } else {
+            winit::window::CursorGrabMode::None
+        };
+        self.window.set_cursor_grab(cursor_mode).unwrap();
+    }
 }
