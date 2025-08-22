@@ -12,8 +12,8 @@ impl CameraUniform {
         }
     }
 
-    pub fn update_view_proj(&mut self, camera: &Camera) {
-        self.view_proj = camera.build_view_projection_matrix().into();
+    pub fn update_view_proj(&mut self, camera: &Camera, elapsed_time: f32) {
+        self.view_proj = camera.build_view_projection_matrix(elapsed_time).into();
     }
 }
 
@@ -28,11 +28,12 @@ pub struct Camera {
 }
 
 impl Camera {
-    fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
+    fn build_view_projection_matrix(&self, elapsed_time: f32) -> cgmath::Matrix4<f32> {
+        let model = cgmath::Matrix4::from_angle_z(cgmath::Deg(elapsed_time * 90.0 % 360.0));
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
 
-        OPENGL_TO_WGPU_MATRIX * proj * view
+        OPENGL_TO_WGPU_MATRIX * proj * view * model
     }
 }
 

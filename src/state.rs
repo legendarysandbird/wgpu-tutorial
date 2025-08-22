@@ -1,6 +1,6 @@
 use crate::{camera, character_controller, texture};
 use cgmath::EuclideanSpace;
-use std::sync::Arc;
+use std::{sync::Arc, time};
 use wgpu::{self, util::DeviceExt};
 use winit::window::Window;
 
@@ -68,6 +68,8 @@ pub struct State {
     pub camera_buffer: wgpu::Buffer,
     pub camera_bind_group: wgpu::BindGroup,
     pub character_controller: character_controller::CharacterController,
+    pub previous_frame_time: time::Instant,
+    pub start_time: time::Instant,
 }
 
 impl State {
@@ -171,7 +173,7 @@ impl State {
         let mut character_controller = character_controller::CharacterController::new();
 
         let camera = camera::Camera {
-            eye: character_controller.update_and_get_position(),
+            eye: character_controller.update_and_get_position(0.0),
             target: cgmath::Point3::origin(),
             up: cgmath::Vector3::unit_y(),
             aspect: config.width as f32 / config.height as f32,
@@ -181,7 +183,7 @@ impl State {
         };
 
         let mut camera_uniform = camera::CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        camera_uniform.update_view_proj(&camera, 0.0);
 
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
@@ -264,6 +266,8 @@ impl State {
             camera_buffer,
             camera_bind_group,
             character_controller,
+            previous_frame_time: time::Instant::now(),
+            start_time: time::Instant::now(),
         })
     }
 
@@ -371,9 +375,13 @@ impl State {
     }
 
     pub fn update(&mut self) {
-        self.camera.eye = self.character_controller.update_and_get_position();
+        let delta = self.previous_frame_time.elapsed().as_secs_f32();
+        self.previous_frame_time = time::Instant::now();
+
+        self.camera.eye = self.character_controller.update_and_get_position(delta);
         self.camera.target = self.character_controller.get_target_position();
-        self.camera_uniform.update_view_proj(&self.camera);
+        self.camera_uniform
+            .update_view_proj(&self.camera, self.start_time.elapsed().as_secs_f32());
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
