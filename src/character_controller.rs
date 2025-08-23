@@ -65,7 +65,7 @@ impl CharacterController {
                 SPEED
             };
 
-        if horizontal_direction != Vector3::zero() {
+        if !horizontal_direction.is_zero() {
             self.position += self.get_rotation_matrix() * horizontal_direction.normalize() * speed;
         }
 
