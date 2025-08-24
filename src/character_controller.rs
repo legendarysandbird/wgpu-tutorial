@@ -2,7 +2,7 @@ use cgmath::{InnerSpace, Matrix3, Point3, Vector3, Zero};
 use std::collections::HashSet;
 use winit::{event_loop::ActiveEventLoop, keyboard::KeyCode};
 
-const SPEED: f32 = 1.0;
+const SPEED: f32 = 3.0;
 const MOUSE_SENSITIVITY: f32 = 0.01;
 const MAX_Y_DEGREES: f32 = 80.0;
 
