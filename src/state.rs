@@ -107,6 +107,7 @@ pub struct State {
     pub _start_time: time::Instant,
     pub instances: Vec<Instance>,
     pub instance_buffer: wgpu::Buffer,
+    pub depth_texture: texture::Texture,
 }
 
 impl State {
@@ -321,6 +322,9 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
+        let depth_texture =
+            texture::Texture::create_depth_texture(&device, &config, "Depth Texture");
+
         Ok(Self {
             surface,
             device,
@@ -344,6 +348,7 @@ impl State {
             _start_time: time::Instant::now(),
             instances,
             instance_buffer,
+            depth_texture,
         })
     }
 
@@ -352,6 +357,9 @@ impl State {
             self.config.width = width;
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
+
+            self.depth_texture =
+                texture::Texture::create_depth_texture(&self.device, &self.config, "Depth Texture");
 
             self.is_surface_configured = true;
         }
@@ -385,7 +393,14 @@ impl State {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
@@ -441,7 +456,13 @@ impl State {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
