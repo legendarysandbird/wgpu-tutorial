@@ -1,0 +1,1 @@
+Following along with the https://sotrh.github.io/learn-wgpu/ tutorial. Dependency management for the dev shell environment is handled by Nix Flakes and DirEnv, which I added separately from the tutorial.
